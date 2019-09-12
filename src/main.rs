@@ -114,7 +114,7 @@ fn run() -> Result<(), NoterError> {
     match matches.subcommand() {
         ("new", Some(command)) => {
             // course_code should *always* be available, by clap
-            let course_code = extract_param("course", command).unwrap();
+            let course_code = extract_param("course", command).unwrap().to_uppercase();
 
             if !validate_course(&course_code) {
                 return Err(NoterError::BadCourseCodeError(course_code));
@@ -126,7 +126,7 @@ fn run() -> Result<(), NoterError> {
         }
         ("course", Some(command)) => {
             // should always be available.
-            let course_code = extract_param("code", command).unwrap();
+            let course_code = extract_param("code", command).unwrap().to_uppercase();
             
             if !validate_course(&course_code) {
                 return Err(NoterError::BadCourseCodeError(course_code));
