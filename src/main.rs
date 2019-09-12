@@ -142,7 +142,7 @@ fn run() -> Result<(), NoterError> {
 }
 
 fn validate_course<T: AsRef<str>>(code: T) -> bool {
-    Regex::new(r"[A-Z]+[0-9]+").map(|re| re.is_match(code.as_ref()))
+    Regex::new(r"^[A-Z]+[0-9]+$").map(|re| re.is_match(code.as_ref()))
         .unwrap_or(false)
 }
 
