@@ -70,11 +70,13 @@ fn init_matches<'a>() -> ArgMatches<'a> {
         .version(crate_version!())
         .subcommand(
             SubCommand::with_name("new")
+                .about("Creates a new note for the course")
                 .arg(Arg::with_name("course").required(true))
                 .arg(Arg::with_name("title").required(false)),
         )
         .subcommand(
             SubCommand::with_name("course")
+                .about("Creates a new folder for the course")
                 .arg(Arg::with_name("code").required(true))
                 .arg(Arg::with_name("title").required(true)),
         )
