@@ -9,16 +9,35 @@ use std::io;
 use std::path::*;
 use std::result::Result;
 
+trait InvalidChar {
+    fn is_invalid_for_path(&self) -> bool;
+}
+
+impl InvalidChar for char {
+    fn is_invalid_for_path(&self) -> bool {
+        match *self {
+            '\"' | '<' | '>' | '|' | '\0' | ':' | '*' | '?' | '\\' | '/' => true,
+            _ => false,
+        }
+    }
+}
+
+fn sanitize_file_name(path: &str) -> String {
+    path.replace(|c: char| c.is_invalid_for_path(), "_").trim_end_matches('.').to_string()
+}
+
 #[derive(Debug, Fail)]
 pub enum NoterError {
     #[fail(display = "IO Error {}", _0)]
     IoError(#[cause] io::Error),
     #[fail(display = "Error {}", _0)]
-    Custom(failure::Error),
+    CustomError(failure::Error),
     #[fail(display = "Regex Error {}", _0)]
     RegexError(#[cause] regex::Error),
     #[fail(display = "Could not find notes folder for course {}", _0)]
     CourseNotFoundError(String),
+    #[fail(display = "Invalid course code {}", _0)]
+    BadCourseCodeError(String),
 }
 
 impl From<io::Error> for NoterError {
@@ -29,7 +48,7 @@ impl From<io::Error> for NoterError {
 
 impl From<failure::Error> for NoterError {
     fn from(err: failure::Error) -> NoterError {
-        NoterError::Custom(err)
+        NoterError::CustomError(err)
     }
 }
 
@@ -96,6 +115,11 @@ fn run() -> Result<(), NoterError> {
         ("new", Some(command)) => {
             // course_code should *always* be available, by clap
             let course_code = extract_param("course", command).unwrap();
+
+            if !validate_course(&course_code) {
+                return Err(NoterError::BadCourseCodeError(course_code));
+            }
+
             let title = extract_param("title", command);
             let mut path = find_course_path(std::env::current_dir()?.as_path(), &course_code)?;
             make_new_note(&mut path, &course_code, title.as_ref())?
@@ -103,6 +127,11 @@ fn run() -> Result<(), NoterError> {
         ("course", Some(command)) => {
             // should always be available.
             let course_code = extract_param("code", command).unwrap();
+            
+            if !validate_course(&course_code) {
+                return Err(NoterError::BadCourseCodeError(course_code));
+            }
+
             let title = extract_param("title", command).unwrap();
             let mut path = PathBuf::from(std::env::current_dir()?.as_path());
             make_new_folder(&mut path, &course_code, &title)?
@@ -112,12 +141,17 @@ fn run() -> Result<(), NoterError> {
     Ok(())
 }
 
+fn validate_course<T: AsRef<str>>(code: T) -> bool {
+    Regex::new(r"[A-Z]+[0-9]+").map(|re| re.is_match(code.as_ref()))
+        .unwrap_or(false)
+}
+
 fn make_new_folder<T: AsRef<str> + Display>(
     path: &mut PathBuf,
     course_code: T,
     title: T,
 ) -> Result<(), NoterError> {
-    path.push(format!("{} {}", course_code, title));
+    path.push(format!("{} {}", course_code, sanitize_file_name(title.as_ref())));
 
     if !path.exists() {
         fs::create_dir(path)?;
@@ -136,7 +170,7 @@ fn make_new_note<T: AsRef<str> + Display>(
     let date = format!("{}", Local::today().format("%F"));
 
     let new_file = title.map_or(format!("{}.md", date), |title| {
-        format!("{}-{}.md", date, title)
+        format!("{}-{}.md", date, sanitize_file_name(title.as_ref()))
     });
 
     path.push(&new_file);
