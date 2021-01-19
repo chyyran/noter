@@ -6,6 +6,7 @@ use regex::*;
 use std::fmt::Display;
 use std::fs;
 use std::io;
+use std::io::prelude::*;
 use std::path::*;
 use std::result::Result;
 
@@ -23,7 +24,9 @@ impl InvalidChar for char {
 }
 
 fn sanitize_file_name(path: &str) -> String {
-    path.replace(|c: char| c.is_invalid_for_path(), "_").trim_end_matches('.').to_string()
+    path.replace(|c: char| c.is_invalid_for_path(), "_")
+        .trim_end_matches('.')
+        .to_string()
 }
 
 #[derive(Debug, Fail)]
@@ -127,7 +130,7 @@ fn run() -> Result<(), NoterError> {
         ("course", Some(command)) => {
             // should always be available.
             let course_code = extract_param("code", command).unwrap().to_uppercase();
-            
+
             if !validate_course(&course_code) {
                 return Err(NoterError::BadCourseCodeError(course_code));
             }
@@ -142,7 +145,8 @@ fn run() -> Result<(), NoterError> {
 }
 
 fn validate_course<T: AsRef<str>>(code: T) -> bool {
-    Regex::new(r"^[A-Z]+[0-9]+$").map(|re| re.is_match(code.as_ref()))
+    Regex::new(r"^[A-Z]+[0-9]+$")
+        .map(|re| re.is_match(code.as_ref()))
         .unwrap_or(false)
 }
 
@@ -151,7 +155,11 @@ fn make_new_folder<T: AsRef<str> + Display>(
     course_code: T,
     title: T,
 ) -> Result<(), NoterError> {
-    path.push(format!("{} {}", course_code, sanitize_file_name(title.as_ref())));
+    path.push(format!(
+        "{} {}",
+        course_code,
+        sanitize_file_name(title.as_ref())
+    ));
 
     if !path.exists() {
         fs::create_dir(path)?;
@@ -162,23 +170,30 @@ fn make_new_folder<T: AsRef<str> + Display>(
     Ok(())
 }
 
-fn make_new_note<T: AsRef<str> + Display>(
+fn make_new_note<T: AsRef<str> + Display + Clone>(
     path: &mut PathBuf,
     course_code: T,
     title: Option<T>,
 ) -> Result<(), NoterError> {
     let date = format!("{}", Local::today().format("%F"));
 
-    let new_file = title.map_or(format!("{}.md", date), |title| {
-        format!("{}-{}.md", date, sanitize_file_name(title.as_ref()))
-    });
+    let (new_file, title_string) =
+        title.map_or((format!("{}.md", date), format!("# {}", date)), |title| {
+            (
+                format!("{}-{}.md", date, sanitize_file_name(title.as_ref())),
+                format!("# {} {}\n", date, title),
+            )
+        });
 
     path.push(&new_file);
     if path.exists() {
         println!("{}::{} already exists.", course_code, &new_file);
         return Ok(());
     }
-    fs::File::create(&path)?;
+
+    let mut file = fs::File::create(&path)?;
+
+    file.write_all(title_string.as_ref())?;
     println!("Created {}::{}", course_code, &new_file);
     Ok(())
 }
